@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools >= 40.6.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.isort]
+profile = "black"
+known_first_party = "classic.locks"
+known_evraz = "evraz"
+sections=["FUTURE", "STDLIB", "THIRDPARTY", "EVRAZ", "FIRSTPARTY", "LOCALFOLDER"]
+line_length = 80
+
+[tool.yapf]
+based_on_style = "pep8"
+spaces_before_comment = 4
+split_before_logical_operator = true
+column_limit = 80
+allow_split_before_dict_value = false
+dedent_closing_brackets = true
+split_before_first_argument = true
+split_complex_comprehension = true
+split_before_dict_set_generator = true
+split_arguments_when_comma_terminated = true
