@@ -3,55 +3,125 @@
 Этот пакет предоставляет функциональность рекомендательных блокировок.
 Является частью проекта "Classic".
 
-Пакет предоставляет абстрактные классы для реализации рекомендальных 
+Пакет предоставляет абстрактные классы для реализации рекомендательных 
 блокировок необходимых типов, а также реализации для баз данных 
-PostgreSQL, MSSQL и файлов.
+PostgreSQL и MSSQL.
 
-Основным компонентом пакета является декортор locking, 
-который устанавливает рекомендательную блокировку на заданный ресурс.
+## Установка
 
-Простой пример использования декоратора:
+```bash
+# Базовая установка
+pip install classic-locks
+
+# Для работы с PostgreSQL через psycopg2
+pip install classic-locks[postgres-psycopg2]
+
+# Для работы с PostgreSQL через psycopg3
+pip install classic-locks[postgres-psycopg3]
+
+# Для работы с PostgreSQL через SQLAlchemy
+pip install classic-locks[postgres-sqlalchemy]
+
+# Для работы с MSSQL через pymssql
+pip install classic-locks[mssql-pymssql]
+
+# Для работы с MSSQL через SQLAlchemy
+pip install classic-locks[mssql-sqlalchemy]
+```
+
+## Использование
+
+### Декоратор @locking
+
+Основным компонентом пакета является декоратор `@locking`, который устанавливает 
+рекомендательную блокировку на заданный ресурс.
 
 ```python
 from classic.components import component
-from classic.locks import locking, PGAdvisoryLocker
+from classic.locks import (
+    locking,
+    SHARED,
+    SESSION,
+    AcquirePsycopg2PGAdvisoryLock,
+    AcquirePsycopg3PGAdvisoryLock,
+    AcquireSQLAlchemyPGAdvisoryLock,
+    AcquirePyMSSQLAdvisoryLock,
+    AcquireSQLAlchemyMSAdvisoryLock,
+)
 
 
 @component
-class SomeCls:
-    @locking('resource_1')
-    def action_1(self):
+class SomeClass:
+    locker: AcquirePsycopg2PGAdvisoryLock
+
+    @locking('resource-{id}')
+    def exclusive_lock_method(self, id: int):
+        """Метод с эксклюзивной блокировкой уровня транзакции"""
         ...
-    
-    # использование в виде контекстного менаджера
-    def action_2(self):
-        with self.locker.acquire('resource_2'):
+
+    @locking(
+        'shared-resource-{id}',
+        lock_type=SHARED,
+        scope=SESSION,
+        block=False,
+        timeout=10
+    )
+    def shared_lock_method(self, id: int):
+        """Метод с разделяемой блокировкой уровня сессии"""
+        ...
+
+    # Использование в виде контекстного менеджера
+    def manual_lock_method(self, id: int):
+        with self.locker(f'manual-resource-{id}'):
             ...
 
 
-locker = PGAdvisoryLocker(session=session)
-some_cls = SomeCls(locker=locker)
-some_cls.action_1()
+# PostgreSQL через psycopg2
+locker = AcquirePsycopg2PGAdvisoryLock()
+some_class = SomeClass(locker=locker)
+
+# PostgreSQL через psycopg3
+locker = AcquirePsycopg3PGAdvisoryLock()
+some_class = SomeClass(locker=locker)
+
+# PostgreSQL через SQLAlchemy
+locker = AcquireSQLAlchemyPGAdvisoryLock()
+some_class = SomeClass(locker=locker)
+
+# MSSQL через pymssql
+locker = AcquirePyMSSQLAdvisoryLock()
+some_class = SomeClass(locker=locker)
+
+# MSSQL через SQLAlchemy
+locker = AcquireSQLAlchemyMSAdvisoryLock()
+some_class = SomeClass(locker=locker)
 ```
 
-Также декторатор может принимать следующие опциональные параметры:
-- lock_type=EXCLUSIVE, тип блокировки. EXCLUSIVE или SHARED
-- timeout=None, кол-во секунд ожидания блокировки. По умолчанию, если блокировка 
-не доступна, то выбрасывается исключение без ожидания.
-- attr='locker', имя атрибута, в который будет помещен инстанс Locker.
+### Параметры декоратора
 
-```python
-from classic.components import component
-from classic.locks import SHARED, locking, PGAdvisoryLocker
+- `resource: str` - шаблон имени ресурса. Может содержать параметры в формате Python format string
+- `lock_type: LockType = EXCLUSIVE` - тип блокировки:
+  - `EXCLUSIVE` - эксклюзивная блокировка
+  - `SHARED` - разделяемая блокировка
+- `scope: ScopeType = TRANSACTION` - область действия блокировки:
+  - `TRANSACTION` - в рамках транзакции
+  - `SESSION` - в рамках сессии
+- `block: bool = True` - блокирующий режим:
+  - `True` - ждать освобождения блокировки
+  - `False` - немедленно вернуть ошибку если ресурс заблокирован
+- `timeout: int = None` - таймаут ожидания в секундах
+- `attr: str = 'locker'` - имя атрибута с инстансом локера
 
+### Особенности реализаций
 
-@component
-class SomeCls:
-    @locking('res_{number}', SHARED, 10, attr='locker_1')
-    def action(self, number):
-        ...
+#### PostgreSQL
+- Использует advisory locks
+- Поддерживает эксклюзивные и разделяемые блокировки
+- Поддерживает блокировки уровня транзакции и сессии
+- Доступны реализации для psycopg2, psycopg3 и SQLAlchemy
 
-locker = PGAdvisoryLocker(session=session)
-some_cls = SomeCls(locker_1=locker)
-some_cls.action(number=1)
-```
+#### MSSQL
+- Использует sp_getapplock
+- Поддерживает различные режимы блокировок (Shared, Update, Exclusive и др.)
+- Поддерживает блокировки уровня транзакции и сессии
+- Доступны реализации для pymssql и SQLAlchemy

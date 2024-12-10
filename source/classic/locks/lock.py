@@ -1,26 +1,32 @@
 from abc import ABC, abstractmethod
-from typing import Literal, Optional
+from typing import Literal
 
 EXCLUSIVE = 'EXCLUSIVE'
 SHARED = 'SHARED'
 
+TRANSACTION = 'TRANSACTION'
+SESSION = 'SESSION'
+
 LockType = Literal['EXCLUSIVE', 'SHARED']
+ScopeType = Literal['TRANSACTION', 'SESSION']
 
 
-class Locker(ABC):
+class AcquireLock(ABC):
     @abstractmethod
-    def acquire(
+    def __call__(
         self,
+        connection: object,
         resource: str,
+        block: bool = True,
+        timeout: int = None,
         lock_type: LockType = EXCLUSIVE,
-        timeout: Optional[int] = None,
+        scope: ScopeType = TRANSACTION,
     ) -> 'Lock':
         ...
 
 
 class Lock(ABC):
     resource: str
-    lock_type: LockType
     timeout: int
 
     @abstractmethod
