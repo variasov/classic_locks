@@ -23,6 +23,16 @@ def mock_locker():
     return mock
 
 
+def takes_connection(func):
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with obj.connect() as conn:
+            return func(conn, *args, **kwargs)
+
+    return wrapper
+
+
 @pytest.fixture
 def test_class(mock_locker):
     """Фикстура, создающая тестовый класс с декорированным методом"""
@@ -30,9 +40,11 @@ def test_class(mock_locker):
     @component
     class TestClass:
         locker: AcquireLock
+        connect: Callable[[], Connection]
 
+        @takes_connection('connect', 'connection')
         @locking('test-{id}')
-        def method(self, id: int) -> str:
+        def method(self, connection: Connection,  id: int) -> str:
             return f'result-{id}'
 
         @locking(
