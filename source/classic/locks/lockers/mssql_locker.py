@@ -34,11 +34,6 @@ LockModeType = Literal[
     'Key-range',
 ]
 
-LOCK_TYPE_FUNC_MAP = {
-    EXCLUSIVE: 'Exclusive',
-    SHARED: 'Shared',
-}
-
 
 def handle_timeout(timeout: int | None, block: bool) -> int:
     """

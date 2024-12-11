@@ -4,6 +4,7 @@ import time
 try:
     from sqlalchemy import func, select
     from sqlalchemy.orm import Session
+
     HAVE_SQLALCHEMY = True
 except ImportError:
     HAVE_SQLALCHEMY = False
@@ -20,31 +21,6 @@ from ..lock import (
     ScopeType,
 )
 
-TRY_QUERY = 'TRY'
-WAIT_QUERY = 'WAIT'
-
-LOCK_FN_QUERY_TYPE_MAP = {
-    'pg_advisory_lock': WAIT_QUERY,
-    'pg_advisory_lock_shared': WAIT_QUERY,
-    'pg_advisory_xact_lock': WAIT_QUERY,
-    'pg_advisory_xact_lock_shared': WAIT_QUERY,
-    'pg_try_advisory_lock': TRY_QUERY,
-    'pg_try_advisory_lock_shared': TRY_QUERY,
-    'pg_try_advisory_xact_lock': TRY_QUERY,
-    'pg_try_advisory_xact_lock_shared': TRY_QUERY,
-}
-
-LOCK_FUNC_UNLOCK_FUNC_MAP = {
-    'pg_advisory_lock': 'pg_advisory_unlock',
-    'pg_advisory_lock_shared': 'pg_advisory_unlock_shared',
-    'pg_advisory_xact_lock': None,
-    'pg_advisory_xact_lock_shared': None,
-    'pg_try_advisory_lock': 'pg_advisory_unlock',
-    'pg_try_advisory_lock_shared': 'pg_advisory_unlock_shared',
-    'pg_try_advisory_xact_lock': None,
-    'pg_try_advisory_xact_lock_shared': None,
-}
-
 
 def get_resource_id(resource: str) -> int:
     # postgre принимает в качестве id ресурса bigint (int8)
@@ -54,6 +30,7 @@ def get_resource_id(resource: str) -> int:
         signed=True
     )
 
+
 def get_lock_fn(
     block: bool,
     lock_type: LockType,
@@ -62,33 +39,70 @@ def get_lock_fn(
     default_lock_type: LockType,
     default_scope: ScopeType,
 ) -> str:
+    """
+    'pg_advisory_lock' - блокирующая обычная блокировка
+    'pg_advisory_lock_shared' - блокирующая shared блокировка
+    'pg_advisory_xact_lock' - блокирующая обычная блокировка в рамках транзакции
+    'pg_advisory_xact_lock_shared' - блокирующая shared блокировка в рамках
+        транзакции
+    'pg_try_advisory_lock' - неблокирующая обычная блокировка
+    'pg_try_advisory_lock_shared' - неблокирующая shared блокировка
+    'pg_try_advisory_xact_lock' - неблокирующая обычная блокировка в
+        рамках транзакции
+    'pg_try_advisory_xact_lock_shared' - неблокирующая shared блокировка в
+        рамках транзакции
+    """
     # Используем значения по умолчанию, если параметры не указаны
     block = block if block is not None else default_block
     lock_type = lock_type if lock_type is not None else default_lock_type
     scope = scope if scope is not None else default_scope
-    
+
     # Формируем базовое имя функции
     fn_name = 'pg_'
-    
+
     # Добавляем 'try_' если блокировка неблокирующая
     if not block:
         fn_name += 'try_'
-    
-    # Добавляем 'advisory_'
+
     fn_name += 'advisory_'
-    
+
     # Добавляем 'xact_' если область действия - транзакция
     if scope == TRANSACTION:
         fn_name += 'xact_'
-    
-    # Добавляем 'lock'
+
     fn_name += 'lock'
-    
+
     # Добавляем '_shared' если тип блокировки - shared
     if lock_type == SHARED:
         fn_name += '_shared'
-    
+
     return fn_name
+
+
+def get_unlock_fn(lock_fn: str) -> str | None:
+    """
+    Возвращает имя функции для освобождения блокировки.
+    
+    Для транзакционных блокировок (содержащих 'xact') возвращает None,
+    так как они освобождаются автоматически при завершении транзакции.
+    
+    Для остальных задаем соответствие:
+    - pg_advisory_lock -> pg_advisory_unlock
+    - pg_advisory_lock_shared -> pg_advisory_unlock_shared
+    - pg_try_advisory_lock -> pg_advisory_unlock
+    - pg_try_advisory_lock_shared -> pg_advisory_unlock_shared
+    """
+    if 'xact' in lock_fn:
+        return None
+
+    if lock_fn == 'pg_advisory_lock':
+        return 'pg_advisory_unlock'
+    if lock_fn == 'pg_advisory_lock_shared':
+        return 'pg_advisory_unlock_shared'
+    if lock_fn == 'pg_try_advisory_lock':
+        return 'pg_advisory_unlock'
+    if lock_fn == 'pg_try_advisory_lock_shared':
+        return 'pg_advisory_unlock_shared'
 
 
 class AcquirePsycopg2PGAdvisoryLock(AcquireLock):
@@ -129,6 +143,7 @@ class AcquirePsycopg2PGAdvisoryLock(AcquireLock):
             connection=connection,
             resource=resource,
             lock_fn=lock_fn,
+            block=block,
             timeout=timeout,
             delay=self.delay,
         )
@@ -140,6 +155,7 @@ class Psycopg2PGAdvisoryLock(Lock):
         connection,
         resource: str,
         lock_fn: str,
+        block: bool,
         timeout: int | None = None,
         delay: int = 0.5,
     ):
@@ -147,8 +163,8 @@ class Psycopg2PGAdvisoryLock(Lock):
         self.resource = resource
         self.resource_id = get_resource_id(resource)
         self.lock_fn = lock_fn
-        self.unlock_fn = LOCK_FUNC_UNLOCK_FUNC_MAP[lock_fn]
-        self.query_type = LOCK_FN_QUERY_TYPE_MAP[lock_fn]
+        self.unlock_fn = get_unlock_fn(lock_fn)
+        self.block = block
         self.timeout = timeout
         self.delay = delay
 
@@ -158,11 +174,11 @@ class Psycopg2PGAdvisoryLock(Lock):
         while True:
             with self.connection.cursor() as cursor:
                 cursor.execute(
-                    'SELECT {}(%s)'.format(self.lock_fn), (self.resource_id, )
+                    'SELECT {}(%s)'.format(self.lock_fn), (self.resource_id,)
                 )
                 is_access = cursor.fetchone()[0]
 
-            if self.query_type == WAIT_QUERY or is_access:
+            if self.block or is_access:
                 break
 
             if not self.timeout or time.monotonic() - start_time > self.timeout:
@@ -174,7 +190,7 @@ class Psycopg2PGAdvisoryLock(Lock):
         if self.unlock_fn:
             with self.connection.cursor() as cursor:
                 cursor.execute(
-                    'SELECT {}(%s)'.format(self.unlock_fn), (self.resource_id, )
+                    'SELECT {}(%s)'.format(self.unlock_fn), (self.resource_id,)
                 )
 
 
@@ -213,6 +229,7 @@ class AcquireSQLAlchemyPGAdvisoryLock(AcquireLock):
             session=session,
             resource=resource,
             lock_fn=lock_fn,
+            block=block,
             timeout=timeout,
             delay=self.delay,
         )
@@ -224,6 +241,7 @@ class SQLAlchemyPGAdvisoryLock(Lock):
         session: Session,
         resource: str,
         lock_fn: str,
+        block: bool,
         timeout: int | None = None,
         delay: int = 0.5,
     ):
@@ -231,8 +249,8 @@ class SQLAlchemyPGAdvisoryLock(Lock):
         self.resource = resource
         self.resource_id = get_resource_id(resource)
         self.lock_fn = lock_fn
-        self.unlock_fn = LOCK_FUNC_UNLOCK_FUNC_MAP[lock_fn]
-        self.query_type = LOCK_FN_QUERY_TYPE_MAP[lock_fn]
+        self.unlock_fn = get_unlock_fn(lock_fn)
+        self.block = block
         self.timeout = timeout
         self.delay = delay
 
@@ -245,7 +263,7 @@ class SQLAlchemyPGAdvisoryLock(Lock):
             )
             is_access = result.scalar()
 
-            if self.query_type == WAIT_QUERY or is_access:
+            if self.block or is_access:
                 break
 
             if not self.timeout or time.monotonic() - start_time > self.timeout:
@@ -297,6 +315,7 @@ class AcquirePsycopg3PGAdvisoryLock(AcquireLock):
             connection=connection,
             resource=resource,
             lock_fn=lock_fn,
+            block=block,
             timeout=timeout,
             delay=self.delay,
         )
@@ -308,6 +327,7 @@ class Psycopg3PGAdvisoryLock(Lock):
         connection,
         resource: str,
         lock_fn: str,
+        block: bool,
         timeout: int | None = None,
         delay: int = 0.5,
     ):
@@ -315,8 +335,8 @@ class Psycopg3PGAdvisoryLock(Lock):
         self.resource = resource
         self.resource_id = get_resource_id(resource)
         self.lock_fn = lock_fn
-        self.unlock_fn = LOCK_FUNC_UNLOCK_FUNC_MAP[lock_fn]
-        self.query_type = LOCK_FN_QUERY_TYPE_MAP[lock_fn]
+        self.unlock_fn = get_unlock_fn(lock_fn)
+        self.block = block
         self.timeout = timeout
         self.delay = delay
 
@@ -331,7 +351,7 @@ class Psycopg3PGAdvisoryLock(Lock):
                 )
                 is_access = cursor.fetchone()[0]
 
-            if self.query_type == WAIT_QUERY or is_access:
+            if self.block or is_access:
                 break
 
             if not self.timeout or time.monotonic() - start_time > self.timeout:
