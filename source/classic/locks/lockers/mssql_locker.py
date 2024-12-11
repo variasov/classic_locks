@@ -62,6 +62,20 @@ def get_lock_mode(
     default_lock_type: LockType,
     custom_mode: LockModeType | None = None,
 ) -> LockModeType:
+    """
+    Определяет режим блокировки для MS SQL Server.
+    
+    Args:
+        lock_type: Запрошенный тип блокировки
+        default_lock_type: Тип блокировки по умолчанию
+        custom_mode: Пользовательский режим блокировки
+        
+    Returns:
+        LockModeType: Режим блокировки MS SQL Server:
+            - 'Exclusive' для EXCLUSIVE
+            - 'Shared' для SHARED
+            - Пользовательский режим, если указан custom_mode
+    """
     if custom_mode:
         return custom_mode
 
@@ -72,6 +86,19 @@ def get_lock_mode(
     return 'Shared'
 
 class AcquirePyMSSQLAdvisoryLock(AcquireLock):
+    """
+    Фабрика для создания блокировок MS SQL Server через pymssql.
+    
+    Args:
+        delay: Задержка между попытками получения блокировки в секундах
+        block: Блокирующий режим по умолчанию
+        lock_type: Тип блокировки по умолчанию (EXCLUSIVE или SHARED)
+        scope: Область действия блокировки по умолчанию (TRANSACTION или SESSION)
+        lock_mode: Пользовательский режим блокировки MS SQL Server
+        
+    Raises:
+        ImportError: Если pymssql не установлен
+    """
     def __init__(
         self,
         delay: int = 0.5,
@@ -122,6 +149,24 @@ class AcquirePyMSSQLAdvisoryLock(AcquireLock):
 
 
 class PyMSSQLAdvisoryLock(Lock):
+    """
+    Реализация блокировки MS SQL Server через pymssql.
+    
+    Использует хранимую процедуру sp_getapplock для получения блокировки
+    и sp_releaseapplock для освобождения.
+    
+    Args:
+        connection: Соединение pymssql
+        resource: Имя блокируемого ресурса
+        lock_mode: Режим блокировки MS SQL Server
+        timeout: Таймаут в миллисекундах
+        delay: Задержка между попытками в секундах
+        lock_owner: Владелец блокировки ('Transaction' или 'Session')
+        database_principal: Принципал базы данных (по умолчанию 'public')
+        
+    Raises:
+        ResourceIsLocked: Если ресурс заблокирован (результат sp_getapplock < 0)
+    """
     def __init__(
         self,
         connection,
@@ -184,6 +229,19 @@ class PyMSSQLAdvisoryLock(Lock):
 
 
 class AcquireSQLAlchemyMSAdvisoryLock(AcquireLock):
+    """
+    Фабрика для создания блокировок MS SQL Server через SQLAlchemy.
+    
+    Args:
+        delay: Задержка между попытками получения блокировки в секундах
+        block: Блокирующий режим по умолчанию
+        lock_type: Тип блокировки по умолчанию (EXCLUSIVE или SHARED)
+        scope: Область действия блокировки по умолчанию (TRANSACTION или SESSION)
+        lock_mode: Пользовательский режим блокировки MS SQL Server
+        
+    Raises:
+        ImportError: Если SQLAlchemy не установлен
+    """
     def __init__(
         self,
         delay: int = 0.5,
@@ -232,6 +290,24 @@ class AcquireSQLAlchemyMSAdvisoryLock(AcquireLock):
 
 
 class SQLAlchemyMSAdvisoryLock(Lock):
+    """
+    Реализация блокировки MS SQL Server через SQLAlchemy.
+    
+    Использует хранимую процедуру sp_getapplock для получения блокировки
+    и sp_releaseapplock для освобождения через SQLAlchemy Engine.
+    
+    Args:
+        session: Сессия SQLAlchemy
+        resource: Имя блокируемого ресурса
+        lock_mode: Режим блокировки MS SQL Server
+        timeout: Таймаут в миллисекундах
+        delay: Задержка между попытками в секундах
+        lock_owner: Владелец блокировки ('Transaction' или 'Session')
+        database_principal: Принципал базы данных (по умолчанию 'public')
+        
+    Raises:
+        ResourceIsLocked: Если ресурс заблокирован (результат sp_getapplock < 0)
+    """
     def __init__(
         self,
         session: Session,

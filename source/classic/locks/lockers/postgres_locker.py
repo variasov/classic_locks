@@ -23,7 +23,15 @@ from ..lock import (
 
 
 def get_resource_id(resource: str) -> int:
-    # postgre принимает в качестве id ресурса bigint (int8)
+    """
+    Преобразует строковый ресурс в числовой идентификатор для PostgreSQL.
+    
+    Args:
+        resource: Строковое имя ресурса
+        
+    Returns:
+        int: 64-битный signed integer, полученный из хеша blake2b строки
+    """
     return int.from_bytes(
         hashlib.blake2b(resource.encode('utf-8')).digest()[:8],
         'little',
@@ -106,6 +114,18 @@ def get_unlock_fn(lock_fn: str) -> str | None:
 
 
 class AcquirePsycopg2PGAdvisoryLock(AcquireLock):
+    """
+    Фабрика для создания блокировок PostgreSQL через psycopg2.
+    
+    Args:
+        delay: Задержка между попытками получения блокировки в секундах
+        block: Блокирующий режим по умолчанию
+        lock_type: Тип блокировки по умолчанию (EXCLUSIVE или SHARED)
+        scope: Область действия блокировки по умолчанию (TRANSACTION или SESSION)
+        
+    Raises:
+        ImportError: Если psycopg2 не установлен
+    """
     def __init__(
         self,
         delay: int = 0.5,
@@ -150,6 +170,20 @@ class AcquirePsycopg2PGAdvisoryLock(AcquireLock):
 
 
 class Psycopg2PGAdvisoryLock(Lock):
+    """
+    Реализация блокировки PostgreSQL через psycopg2.
+    
+    Args:
+        connection: Соединение psycopg2
+        resource: Имя блокируемого ресурса
+        lock_fn: Имя функции блокировки в PostgreSQL
+        block: Блокирующий режим
+        timeout: Таймаут в секундах (None для бесконечного ожидания)
+        delay: Задержка между попытками в секундах
+        
+    Raises:
+        ResourceIsLocked: Если ресурс заблокирован и timeout истек
+    """
     def __init__(
         self,
         connection,
@@ -195,6 +229,18 @@ class Psycopg2PGAdvisoryLock(Lock):
 
 
 class AcquireSQLAlchemyPGAdvisoryLock(AcquireLock):
+    """
+    Фабрика для создания блокировок PostgreSQL через SQLAlchemy.
+    
+    Args:
+        delay: Задержка между попытками получения блокировки в секундах
+        block: Блокирующий режим по умолчанию
+        lock_type: Тип блокировки по умолчанию (EXCLUSIVE или SHARED)
+        scope: Область действия блокировки по умолчанию (TRANSACTION или SESSION)
+        
+    Raises:
+        ImportError: Если SQLAlchemy не установлен
+    """
     def __init__(
         self,
         delay: int = 0.5,
@@ -236,6 +282,20 @@ class AcquireSQLAlchemyPGAdvisoryLock(AcquireLock):
 
 
 class SQLAlchemyPGAdvisoryLock(Lock):
+    """
+    Реализация блокировки PostgreSQL через SQLAlchemy.
+    
+    Args:
+        session: Сессия SQLAlchemy
+        resource: Имя блокируемого ресурса
+        lock_fn: Имя функции блокировки в PostgreSQL
+        block: Блокирующий режим
+        timeout: Таймаут в секундах (None для бесконечного ожидания)
+        delay: Задержка между попытками в секундах
+        
+    Raises:
+        ResourceIsLocked: Если ресурс заблокирован и timeout истек
+    """
     def __init__(
         self,
         session: Session,
@@ -279,6 +339,18 @@ class SQLAlchemyPGAdvisoryLock(Lock):
 
 
 class AcquirePsycopg3PGAdvisoryLock(AcquireLock):
+    """
+    Фабрика для создания блокировок PostgreSQL через psycopg3.
+    
+    Args:
+        delay: Задержка между попытками получения блокировки в секундах
+        block: Блокирующий режим по умолчанию
+        lock_type: Тип блокировки по умолчанию (EXCLUSIVE или SHARED)
+        scope: Область действия блокировки по умолчанию (TRANSACTION или SESSION)
+        
+    Raises:
+        ImportError: Если psycopg3 не установлен
+    """
     def __init__(
         self,
         delay: int = 0.5,
@@ -322,6 +394,20 @@ class AcquirePsycopg3PGAdvisoryLock(AcquireLock):
 
 
 class Psycopg3PGAdvisoryLock(Lock):
+    """
+    Реализация блокировки PostgreSQL через psycopg3.
+    
+    Args:
+        connection: Соединение psycopg3
+        resource: Имя блокируемого ресурса
+        lock_fn: Имя функции блокировки в PostgreSQL
+        block: Блокирующий режим
+        timeout: Таймаут в секундах (None для бесконечного ожидания)
+        delay: Задержка между попытками в секундах
+        
+    Raises:
+        ResourceIsLocked: Если ресурс заблокирован и timeout истек
+    """
     def __init__(
         self,
         connection,
