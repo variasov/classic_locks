@@ -44,7 +44,7 @@ def handle_timeout(timeout: int | None, block: bool) -> int:
         block: если False, возвращает 0 (неблокирующий вызов)
     
     Returns:
-        timeout в миллисекун��ах:
+        timeout в миллисекундах:
         - 0: неблокирующий вызов
         - -1: бесконечное ожидание
         - >0: ожидание в миллисекундах
