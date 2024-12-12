@@ -11,9 +11,9 @@ from .lock import (
     ScopeType,
 )
 from .lockers import (
-    AcquirePyMSSQLAdvisoryLock,
-    AcquireSQLAlchemyMSAdvisoryLock,
     AcquirePsycopg2PGAdvisoryLock,
     AcquirePsycopg3PGAdvisoryLock,
+    AcquirePyMSSQLAdvisoryLock,
+    AcquireSQLAlchemyMSAdvisoryLock,
     AcquireSQLAlchemyPGAdvisoryLock,
 )

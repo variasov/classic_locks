@@ -1,14 +1,18 @@
 from functools import wraps
 from typing import Any
 
+from classic.components import doublewrap
 from classic.components.extra_annotations import add_extra_annotation
 from classic.components.types import Function
 
 from .lock import EXCLUSIVE, TRANSACTION, AcquireLock, LockType, ScopeType
 
 
+@doublewrap
 def locking(
+    function: Function,
     resource: str,
+    connection_param: str = 'connection',
     block: bool = True,
     timeout: int = None,
     lock_type: LockType = EXCLUSIVE,
@@ -34,19 +38,17 @@ def locking(
         def update_user(self, user_id: int):
             ...
     """
-    def decorate(function: Function) -> Function:
-        @wraps(function)
-        def wrapper(obj: object, *args: Any, **kwargs: Any) -> Any:
-            locker = getattr(obj, attr)
-            with locker(
-                resource.format(**kwargs),
-                block,
-                timeout,
-                lock_type,
-                scope,
-            ):
-                return function(obj, *args, **kwargs)
+    @wraps(function)
+    def wrapper(obj: object, *args: Any, **kwargs: Any) -> Any:
+        locker = getattr(obj, attr)
+        with locker(
+            kwargs[connection_param],
+            resource.format(**kwargs),
+            block,
+            timeout,
+            lock_type,
+            scope,
+        ):
+            return function(obj, *args, **kwargs)
 
-        return add_extra_annotation(wrapper, attr, AcquireLock)
-
-    return decorate
+    return add_extra_annotation(wrapper, attr, AcquireLock)

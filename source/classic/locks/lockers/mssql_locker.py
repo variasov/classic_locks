@@ -12,7 +12,6 @@ except ImportError:
 from .. import errors
 from ..lock import (
     EXCLUSIVE,
-    SHARED,
     TRANSACTION,
     AcquireLock,
     Lock,

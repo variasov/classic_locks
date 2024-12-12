@@ -18,7 +18,7 @@ from ..lock import (
     AcquireLock,
     Lock,
     LockType,
-    ScopeType,
+    ScopeType, SESSION,
 )
 
 
@@ -62,29 +62,37 @@ def get_lock_fn(
     """
     # Используем значения по умолчанию, если параметры не указаны
     block = block if block is not None else default_block
-    lock_type = lock_type if lock_type is not None else default_lock_type
-    scope = scope if scope is not None else default_scope
+    lock_type = lock_type or default_lock_type
+    scope = scope or default_scope
 
-    # Формируем базовое имя функции
-    fn_name = 'pg_'
+    # Используем if/else вместо склейки строк или словаря для производительности
+    # Блокирующие транзакционные блокировки
+    if block and scope == TRANSACTION:
+        if lock_type == SHARED:
+            return 'pg_advisory_xact_lock_shared'
+        elif lock_type == EXCLUSIVE:
+            return 'pg_advisory_xact_lock'
 
-    # Добавляем 'try_' если блокировка неблокирующая
-    if not block:
-        fn_name += 'try_'
+    # Блокирующие сессионные блокировки
+    elif block and scope == SESSION:
+        if lock_type == SHARED:
+            return 'pg_advisory_lock_shared'
+        elif lock_type == EXCLUSIVE:
+            return 'pg_advisory_lock'
 
-    fn_name += 'advisory_'
+    # Неблокирующие транзакционные блокировки
+    elif not block and scope == TRANSACTION:
+        if lock_type == SHARED:
+            return 'pg_try_advisory_xact_lock_shared'
+        elif lock_type == EXCLUSIVE:
+            return 'pg_try_advisory_xact_lock'
 
-    # Добавляем 'xact_' если область действия - транзакция
-    if scope == TRANSACTION:
-        fn_name += 'xact_'
-
-    fn_name += 'lock'
-
-    # Добавляем '_shared' если тип блокировки - shared
-    if lock_type == SHARED:
-        fn_name += '_shared'
-
-    return fn_name
+    # Неблокирующие сессионные блокировки
+    else:  # not block and scope == SESSION
+        if lock_type == SHARED:
+            return 'pg_try_advisory_lock_shared'
+        elif lock_type == EXCLUSIVE:
+            return 'pg_try_advisory_lock'
 
 
 def get_unlock_fn(lock_fn: str) -> str | None:
@@ -109,8 +117,7 @@ def get_unlock_fn(lock_fn: str) -> str | None:
         return 'pg_advisory_unlock_shared'
     if lock_fn == 'pg_try_advisory_lock':
         return 'pg_advisory_unlock'
-    if lock_fn == 'pg_try_advisory_lock_shared':
-        return 'pg_advisory_unlock_shared'
+    return 'pg_advisory_unlock_shared'
 
 
 class AcquirePsycopg2PGAdvisoryLock(AcquireLock):

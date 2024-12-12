@@ -36,7 +36,13 @@ pip install classic-locks[mssql-sqlalchemy]
 Основным компонентом пакета является декоратор `@locking`, который устанавливает 
 рекомендательную блокировку на заданный ресурс.
 
+Для автоматического управления соединениями требуется использовать декоратор 
+`@takes_connection` из библиотеки [classic-db-utils](https://pypi.org/project/classic-db-utils/).
+
 ```python
+from typing import Any, Callable
+
+from classic.db_utils import takes_connection
 from classic.components import component
 from classic.locks import (
     locking,
@@ -53,20 +59,25 @@ from classic.locks import (
 @component
 class SomeClass:
     locker: AcquirePsycopg2PGAdvisoryLock
+    # метод для получения соединения, к примеру, фабрика или пул соединений
+    connect: Callable[[], Any]
 
+    @takes_connection
     @locking('resource-{id}')
-    def exclusive_lock_method(self, id: int):
+    def exclusive_lock_method(self, connection, id: int):
         """Метод с эксклюзивной блокировкой уровня транзакции"""
         ...
 
+    @takes_connection(connection_param='custom_conn')
     @locking(
         'shared-resource-{id}',
+        connection_param='custom_conn',
         lock_type=SHARED,
         scope=SESSION,
         block=False,
         timeout=10
     )
-    def shared_lock_method(self, id: int):
+    def shared_lock_method(self, custom_conn, id: int):
         """Метод с разделяемой блокировкой уровня сессии"""
         ...
 
